@@ -1,7 +1,86 @@
 """ top level run script """
 
+from pathlib import Path
+import argparse
+import glob
+import subprocess
+import os
+import shutil
+from hdmf_zarr.nwb import NWBZarrIO
+from pynwb import NWBHDF5IO
+
+data_folder = Path("../data/")
+results_folder = Path("../results/")
+scratch_folder = Path("../scratch/")
+
+
+def zarr_to_hdf5(zarr_path):
+    hdf5_path = zarr_path.parent / zarr_path.stem
+    with NWBZarrIO(str(zarr_path), mode='r') as read_io:  # Create Zarr IO object for read
+        with NWBHDF5IO(hdf5_path, 'w') as export_io:  # Create HDF5 IO object for write
+            export_io.export(src_io=read_io, write_args=dict(link_data=False))  # Export from Zarr to HDF5
+    print(f'hdf5 file made: {hdf5_path}')
+    shutil.rmtree(zarr_path)
+
+
+def hdf5_to_zarr(hdf5_path):
+    zarr_path = hdf5_path.parent / hdf5_path.name
+    with NWBHDF5IO(hdf5_path, mode='r') as read_io:  # Create HDF5 IO object for read
+        with NWBZarrIO(str(zarr_path), 'w') as export_io:  # Create Zarr IO object for write
+            export_io.export(src_io=read_io, write_args=dict(link_data=False))  # Export from HDF5 to Zarr
+    print(f'zarr file made: {zarr_path}')
+    shutil.rmtree(hdf5_path)
+
+
 def run():
     """ basic run function """
-    pass
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dandiset_id", type=str, required=True)
+    parser.add_argument("--input_nwb_path", type=str, default=f'nwb')
+    parser.add_argument("--filetype", type=str, default="hdf5", choices=['hdf5','zarr'])
+
+    args = parser.parse_args()
+    dandiset_id = args.dandiset_id
+    input_nwb_path = data_folder / Path(args.input_nwb_path)
+    print('input dir',input_nwb_path)
+
+    # clear scratch folder
+    for file in scratch_folder.iterdir():
+        shutil.rmtree(file)
+    print(f'cleared scratch folder: {list(scratch_folder.iterdir())}')
+
+    # download dandiset metadata
+    download_result = subprocess.run(["dandi", "download", f"DANDI:{dandiset_id}", '--download', 'dandiset.yaml', '--output-dir', str(scratch_folder)], capture_output=True, text=True)
+    print('download result', download_result)
+    # this folder should exist after successful download
+    dandiset_dir = scratch_folder / dandiset_id
+ 
+    # copy data files to scratch folder
+    print('copying', input_nwb_path, dandiset_dir)
+    shutil.copytree(str(input_nwb_path), str(dandiset_dir), dirs_exist_ok=True)
+
+    filetype = args.filetype
+    print(f'upload filetype: {filetype}')
+    # convert zarr nwbs to hdmf nwbs
+    for filepath in dandiset_dir.iterdir():
+        if filepath.is_dir() and filetype == 'hdf5':
+            assert (filepath / ".zattrs").is_file(), f"{filepath.name} is not a valid Zarr folder"
+            print(f'converting {filepath} to hdf5 from zarr')
+            zarr_to_hdf5(filepath)
+        elif filepath.suffix == '.nwb' and filetype == 'zarr':
+            hdf5_to_zarr(filepath, output_nwb_dir)
+            print(f'converting {filepath} to zarr from hdf5')
+            hdf5_to_zarr(filepath)
+
+    # run dandi organize on files to upload
+    print('='*64,'organizing in',dandiset_dir)
+    result = subprocess.run(["dandi", "organize", '--files-mode', 'move', '--dandiset-path', str(dandiset_dir)], capture_output=True, text=True)
+    print('dandi organize run', result)
+
+    # upload files
+    print('='*64,'uploading!')
+    result = subprocess.run(["dandi", "upload"], cwd=str(dandiset_dir), capture_output=True, text=True)
+    print('dandi upload run', result)
+
 
 if __name__ == "__main__": run()

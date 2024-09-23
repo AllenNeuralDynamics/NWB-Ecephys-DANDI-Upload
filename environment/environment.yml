@@ -1,0 +1,7 @@
+environment_version: 1
+credentials:
+- type: api-key
+  id: q9wUTkO1GZTkoyo8
+  description: DANDI API Key for accessing embargoed data
+  key: API_KEY
+  secret: API_SECRET
