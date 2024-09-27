@@ -6,6 +6,7 @@ import glob
 import subprocess
 import os
 import shutil
+import re
 from hdmf_zarr.nwb import NWBZarrIO
 from pynwb import NWBHDF5IO
 
@@ -36,10 +37,12 @@ def run():
     """ basic run function """
     parser = argparse.ArgumentParser()
     parser.add_argument("--dandiset_id", type=str, required=True)
+    parser.add_argument("--raw_movies", type=str, required=True)
     parser.add_argument("--input_nwb_path", type=str, default=f'nwb')
     parser.add_argument("--filetype", type=str, default="hdf5", choices=['hdf5','zarr'])
 
     args = parser.parse_args()
+    raw = args.raw_movies
     dandiset_id = args.dandiset_id
     input_nwb_path = data_folder / Path(args.input_nwb_path)
     print('input dir',input_nwb_path)
@@ -58,6 +61,16 @@ def run():
     # copy data files to scratch folder
     print('copying', input_nwb_path, dandiset_dir)
     shutil.copytree(str(input_nwb_path), str(dandiset_dir), dirs_exist_ok=True)
+        # Extract the date from the filename using a regex that looks for YYYY-MM-DD format
+    for nwb in dandiset_dir.iterdir():
+        if nwb.suffix != ".nwb":
+            continue
+        match = re.search(r"\d{4}-\d{2}-\d{2}", nwb.stem)
+        
+        if match:
+            date = match.group(0)  # Extract the date
+        else:
+            raise ValueError(f"No date found in the file name: {nwb.stem}")
 
     filetype = args.filetype
     print(f'upload filetype: {filetype}')
@@ -79,6 +92,28 @@ def run():
 
     # upload files
     print('='*64,'uploading!')
+
+    for item in dandiset_dir.iterdir():
+        if item.is_dir():  # Check if it's a directory
+            organized_dir = item
+            break  # Since we only need the first subdirectory
+    for organized_nwbfile in organized_dir.iterdir(): 
+        print("ORGANIZED FILE: ", organized_nwbfile) 
+        if organized_nwbfile.suffix != ".nwb":
+            continue
+        dandi_stem = organized_nwbfile.stem
+        dandi_stem_split = dandi_stem.split("_")
+        
+        date = date.replace("-", "+")
+        if raw == "True":
+            # Insert session_id and replace experiment_id with the extracted date
+            dandi_stem_split.insert(1, f"ses-{date}-raw-movies")
+        else:
+            # Insert session_id and replace experiment_id with the extracted date
+            dandi_stem_split.insert(1, f"ses-{date}")
+        
+        corrected_name = "_".join(dandi_stem_split) + ".nwb"
+        organized_nwbfile.rename(organized_nwbfile.parent / corrected_name)
     result = subprocess.run(["dandi", "upload"], cwd=str(dandiset_dir), capture_output=True, text=True)
     print('dandi upload run', result)
 
