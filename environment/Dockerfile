@@ -1,4 +1,4 @@
-# hash:sha256:493aebfd43423a5ce75891f6371f828645f26c01bd128e8e8bf65d821466fe9b
+# hash:sha256:442a24c4d62b534af285f3c9f9168149ea56aaa7e6b5b4a26b74426aefe40667
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/jupyterlab:3.6.1-miniconda4.12.0-python3.9-ubuntu20.04
 
@@ -12,6 +12,6 @@ COPY git-askpass /
 
 RUN pip3 install -U --no-cache-dir \
     argparse \
-    dandi \
+    dandi==0.63.1 \
     hdmf-zarr==0.8.0 \
     pynwb==2.8.1
