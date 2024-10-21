@@ -39,7 +39,7 @@ def run():
     parser.add_argument("--dandiset_id", type=str, required=True)
     parser.add_argument("--raw_movies", type=str, required=True)
     parser.add_argument("--input_nwb_path", type=str, default=f'nwb')
-    parser.add_argument("--filetype", type=str, default="hdf5", choices=['hdf5','zarr'])
+    parser.add_argument("--upload_filetype", type=str, default="hdf5", choices=['hdf5','zarr'])
 
     args = parser.parse_args()
     raw = args.raw_movies
@@ -72,7 +72,7 @@ def run():
         else:
             raise ValueError(f"No date found in the file name: {nwb.stem}")
 
-    filetype = args.filetype
+    filetype = args.upload_filetype
     print(f'upload filetype: {filetype}')
     # convert zarr nwbs to hdmf nwbs
     for filepath in dandiset_dir.iterdir():
